@@ -66,30 +66,6 @@ public class FileTransfer {
         }
     }
 
-
-    public static void runReceiver(String... interfaceIps) {
-        try {
-            List<Thread> receiverThreads = new ArrayList<>();
-
-            // Create a thread for each interface
-            for (int i = 0; i < interfaceIps.length; i++) {
-                final int index = i;
-                Thread thread = new Thread(() -> receive(interfaceIps));
-                receiverThreads.add(thread);
-                thread.start();
-            }
-
-            // Wait for all receiver threads to finish
-            for (Thread thread : receiverThreads) {
-                thread.join();
-            }
-
-            System.out.println("All receiver connections closed");
-        } catch (InterruptedException e) {
-            handleException("Error in runReceiver", e);
-        }
-    }
-
     private static void sendFile(String interfaceIp, String filePath, long startByte, long endByte) {
         try {
             Socket socket = new Socket(interfaceIp, PORT_NUMBER);
@@ -129,46 +105,72 @@ public class FileTransfer {
         }
     }
 
-    private static void receive(String[] interfaceIps) {
+    public static void runReceiver(String... interfaceIps) {
         try {
-            List<ServerSocket> serverSockets = new ArrayList<>();
-            List<Thread> threads = new ArrayList<>();
+            // Create a ServerSocket on the primary port
+            ServerSocket serverSocket = new ServerSocket(PORT_NUMBER);
+            System.out.println("Server listening on port " + PORT_NUMBER);
 
-            // Create a ServerSocket for each interface
+            List<Thread> receiverThreads = new ArrayList<>();
+
+            // Accept connections on the main ServerSocket
             for (int i = 0; i < interfaceIps.length; i++) {
-                int port = PORT_NUMBER + i;
-                ServerSocket serverSocket = new ServerSocket(port);
-                serverSockets.add(serverSocket);
-
-                System.out.println("Server listening on port " + port);
-
-                // Accept connections on the socket
                 Socket clientSocket = serverSocket.accept();
-
                 System.out.println("Connected to client: " + clientSocket.getInetAddress() + " on port " + clientSocket.getPort());
 
-                // Create thread for receiving on each socket with the corresponding index
-                int finalI = i;
-                Thread thread = new Thread(() -> receiveFile(clientSocket, "part" + finalI + "_"));
-                threads.add(thread);
+                final int index = i;
+                Thread thread = new Thread(() -> receiveFile(clientSocket, "part" + index + "_"));
+                receiverThreads.add(thread);
+            }
+
+            // Start all receiver threads
+            for (Thread thread : receiverThreads) {
                 thread.start();
             }
 
             // Wait for all receiver threads to finish
-            for (Thread thread : threads) {
+            for (Thread thread : receiverThreads) {
                 thread.join();
             }
 
-            // Close all ServerSockets
-            for (ServerSocket serverSocket : serverSockets) {
-                serverSocket.close();
+            // Close the main ServerSocket
+            serverSocket.close();
+
+            // Combine files after all receiver threads have finished
+            combineFiles(receiverThreads.size(), currentFileName);
+
+            System.out.println("All receiver connections closed");
+        } catch (IOException | InterruptedException e) {
+            handleException("Error in runReceiver", e);
+        }
+    }
+@Deprecated
+    private static void receive(ServerSocket serverSocket) {
+        try {
+            List<Thread> threads = new ArrayList<>();
+
+            // Accept connections on the main ServerSocket
+            Socket clientSocket = serverSocket.accept();
+
+            System.out.println("Connected to client: " + clientSocket.getInetAddress() + " on port " + clientSocket.getPort());
+
+            // Create thread for receiving on the accepted socket
+            Thread thread = new Thread(() -> receiveFile(clientSocket, "part"));
+            threads.add(thread);
+            thread.start();
+
+            // Wait for the receiver thread to finish
+            for (Thread t : threads) {
+                t.join();
             }
 
-            combineFiles(interfaceIps.length, currentFileName);
+            // Combine files after all receiver threads have finished
+            combineFiles(threads.size(), currentFileName);
         } catch (IOException | InterruptedException e) {
             handleException("Error in receive", e);
         }
     }
+
 
 
 
