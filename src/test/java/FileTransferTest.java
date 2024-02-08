@@ -1,20 +1,21 @@
 import static org.junit.jupiter.api.Assertions.*;
 
+import eu.lemondreams.FileTransfer;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
-import java.net.Socket;
-
-import eu.lemondreams.FileTransfer;
 
 class FileTransferTest {
 
     // Replace these with actual file paths and interface IPs for testing
     private static final String FILE_PATH = FileTransferTest.class.getResource("testFile1.txt").getPath().toString();
-    private static final String INTERFACE_IP1 = "localhost";
-    private static final String INTERFACE_IP2 = "localhost";
+    private static final String INTERFACE_IP1 = "127.0.0.1";
+    private static final String INTERFACE_IP2 = "127.0.0.1";
+
+    private static final String INTERFACE_IP3 = "192.168.188.26";
+    private static final String INTERFACE_IP4 = "192.168.188.28";
 
     private final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
     private final PrintStream originalOut = System.out;
@@ -23,12 +24,12 @@ class FileTransferTest {
     void testSendAndReceiveFile() {
         // Create a new thread for the sender
         Thread senderThread = new Thread(() -> {
-            FileTransfer.runSender(INTERFACE_IP1, INTERFACE_IP2, FILE_PATH);
+            FileTransfer.runSender(FILE_PATH,INTERFACE_IP3, INTERFACE_IP4 );
         });
 
         // Create a new thread for the receiver
         Thread receiverThread = new Thread(() -> {
-            FileTransfer.runReceiver();
+            FileTransfer.runReceiver(INTERFACE_IP1,INTERFACE_IP2);
         });
 
         // Start both threads
@@ -38,11 +39,14 @@ class FileTransferTest {
         // Wait for both threads to finish
         try {
             senderThread.join();
-            System.out.println("Sender completed");
-
             receiverThread.join();
-            System.out.println("Reciever completed");
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
 
+        // Introduce a short delay to allow for file combination
+        try {
+            Thread.sleep(1000);
         } catch (InterruptedException e) {
             e.printStackTrace();
         }
@@ -77,9 +81,6 @@ class FileTransferTest {
         // Assert that an error message is printed for an invalid file path
         assertTrue(systemOut().contains("Error: File does not exist or cannot be read."));
     }
-
-
-
 
     // Helper method to capture System.out.println output
     private String systemOut() {
