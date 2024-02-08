@@ -48,7 +48,7 @@ class FileTransferTest {
         }
 
         // Check if the combined file is created successfully
-        String combinedFilePath = "combinedFile.txt";
+        String combinedFilePath = "testFile1.txt";
         assertTrue(new java.io.File(combinedFilePath).exists());
 
         // Additional assertions can be added based on specific requirements
@@ -77,6 +77,9 @@ class FileTransferTest {
         // Assert that an error message is printed for an invalid file path
         assertTrue(systemOut().contains("Error: File does not exist or cannot be read."));
     }
+
+
+
 
     // Helper method to capture System.out.println output
     private String systemOut() {

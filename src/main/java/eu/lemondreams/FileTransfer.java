@@ -11,7 +11,7 @@ public class FileTransfer {
     private static String currentFileName= "";
     public static void main(String[] args) {
         if (args.length != 4) {
-            System.out.println("Usage: java FileTransfer <SEND/RECEIVE> <INTERFACE_IP1> <INTERFACE_IP2> <FILE_PATH>");
+            System.out.println("Usage: java FileTransfer <SEND/RECEIVE> <FILE_PATH> <INTERFACE_IP1> <INTERFACE_IP2> ");
             System.exit(1);
         }
 
