@@ -8,7 +8,7 @@ import java.util.logging.Logger;
 public class FileTransfer {
     private static final int PORT_NUMBER = 9990;
 
-
+    private static String currentFileName= "";
     public static void main(String[] args) {
         if (args.length != 4) {
             System.out.println("Usage: java FileTransfer <SEND/RECEIVE> <INTERFACE_IP1> <INTERFACE_IP2> <FILE_PATH>");
@@ -105,7 +105,7 @@ public class FileTransfer {
                 System.out.println("Connections closed");
                 running = false;
 
-                combineFiles("part1_","part2_","testFile1.txt","combinedFile.txt");
+                combineFiles("part1_","part2_",currentFileName,currentFileName);
 
             }
         } catch (IOException | InterruptedException e) {
@@ -163,15 +163,15 @@ public class FileTransfer {
         String part1FileName = part1Prefix + originalFileName;
         String part2FileName = part2Prefix + originalFileName;
 
+        System.out.println(part1Prefix);
+        System.out.println(part2Prefix);
+
         try (FileOutputStream fileOutputStream = new FileOutputStream(combinedFileName);
              FileInputStream part1InputStream = new FileInputStream(part1FileName);
              FileInputStream part2InputStream = new FileInputStream(part2FileName)) {
 
             byte[] buffer = new byte[1024];
             int bytesRead;
-
-            // Write the original filename to the combined file
-            fileOutputStream.write(("Original Filename: " + originalFileName + "\n").getBytes());
 
             // Write content of part1 file to combined file
             while ((bytesRead = part1InputStream.read(buffer)) != -1) {
@@ -200,7 +200,8 @@ public class FileTransfer {
 
                 // Read file name and size
                 String fileName = objectInputStream.readUTF();
-                long fileSize = objectInputStream.readLong();
+                currentFileName = fileName;
+            long fileSize = objectInputStream.readLong();
 
                 System.out.println("Receiving file: " + fileName + " (" + fileSize + " bytes)");
 
