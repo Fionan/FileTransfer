@@ -9,6 +9,8 @@ import java.util.logging.Logger;
 public class FileTransfer {
     private static final int PORT_NUMBER = 9990;
 
+    private static final  HashMap<Integer,String> order_of_files_recieved = new HashMap<>();
+
     private static String currentFileName= "";
     public static void main(String[] args) {
         if (args.length < 3) {
@@ -50,7 +52,8 @@ public class FileTransfer {
                 long startByte = index * chunkSize;
                 long endByte = (index + 1 == totalInterfaces) ? fileSize : (index + 1) * chunkSize;
 
-                Thread thread = new Thread(() -> sendFile(interfaceIps[index], filePath, startByte, endByte));
+                int finalI = i;
+                Thread thread = new Thread(() -> sendFile(interfaceIps[index], filePath, startByte, endByte, finalI));
                 senderThreads.add(thread);
                 thread.start();
             }
@@ -66,7 +69,7 @@ public class FileTransfer {
         }
     }
 
-    private static void sendFile(String interfaceIp, String filePath, long startByte, long endByte) {
+    private static void sendFile(String interfaceIp, String filePath, long startByte, long endByte, int partNumber) {
         try {
             Socket socket = new Socket(interfaceIp, PORT_NUMBER);
 
@@ -76,10 +79,11 @@ public class FileTransfer {
 
                 // Send file name and size
                 File file = new File(filePath);
-                objectOutputStream.writeUTF(file.getName());
+                String fileNameWithPart = "part" + partNumber + "_" + file.getName();
+                objectOutputStream.writeUTF(fileNameWithPart);
                 objectOutputStream.writeLong(file.length());
 
-                System.out.println("Sending file: " + file.getName() + " (" + file.length() + " bytes)");
+                System.out.println("Sending file: " + fileNameWithPart + " (" + file.length() + " bytes)");
 
                 // Send file content from start to end positions
                 try (FileInputStream fileInputStream = new FileInputStream(file)) {
@@ -96,7 +100,7 @@ public class FileTransfer {
                 }
 
                 objectOutputStream.flush();
-                System.out.println("File sent successfully: " + file.getName());
+                System.out.println("File sent successfully: " + fileNameWithPart);
 
                 socket.close();
             }
@@ -120,6 +124,7 @@ public class FileTransfer {
 
                 final int index = i;
                 Thread thread = new Thread(() -> receiveFile(clientSocket, "part" + index + "_"));
+
                 receiverThreads.add(thread);
             }
 
@@ -173,20 +178,51 @@ public class FileTransfer {
 
 
 
+    private static void receiveFile(Socket socket, String partPrefix) {
+        try {
+            synchronized (socket.getInputStream()) {
+                InputStream inputStream = socket.getInputStream();
+                ObjectInputStream objectInputStream = new ObjectInputStream(inputStream);
 
-    private static void combineFiles(int totalParts, String originalFileName) {
+                // Read file name and size
+                String fileNameWithPart = objectInputStream.readUTF();
+                long fileSize = objectInputStream.readLong();
+
+                // Extract part number and original file name
+                String[] fileNameParts = fileNameWithPart.split("_", 2);
+                int partNumber = Integer.parseInt(fileNameParts[0].substring(4)); // assuming "part" prefix
+                String originalFileName = fileNameParts[1];
+
+                System.out.println("Receiving file part " + partNumber + " of: " + originalFileName + " (" + fileSize + " bytes)");
+
+                // Read file content
+                byte[] buffer = new byte[1024];
+                FileOutputStream fileOutputStream = new FileOutputStream(partPrefix + fileNameWithPart);
+                int bytesRead;
+
+                while ((bytesRead = objectInputStream.read(buffer)) != -1) {
+                    fileOutputStream.write(buffer, 0, bytesRead);
+                }
+
+                fileOutputStream.close();
+                System.out.println("File part received successfully: " + fileNameWithPart);
+            }
+        } catch (IOException e) {
+            handleException("Error in receiveFile", e);
+        }
+    }
+
+
+    public static void combineFiles(int totalParts, String originalFileName) {
         try {
             List<FileInputStream> partInputStreams = new ArrayList<>();
 
             // Open FileInputStreams for each part
-            for (int i = 0; i < totalParts; i++) {
+            for (int i = 1; i <= totalParts; i++) {
                 String partFileName = "part" + i + "_" + originalFileName;
                 partInputStreams.add(new FileInputStream(partFileName));
             }
 
-            // Create a SequenceInputStream to concatenate all part files
-            Enumeration<FileInputStream> enumeration = Collections.enumeration(partInputStreams);
-            SequenceInputStream sequenceInputStream = new SequenceInputStream(enumeration);
 
             // Open FileOutputStream for the combined file
             try (FileOutputStream fileOutputStream = new FileOutputStream(originalFileName)) {
@@ -194,18 +230,16 @@ public class FileTransfer {
                 int bytesRead;
 
                 // Write content of all parts to the combined file
-                while ((bytesRead = sequenceInputStream.read(buffer)) != -1) {
-                    fileOutputStream.write(buffer, 0, bytesRead);
+                for (FileInputStream partInputStream : partInputStreams) {
+                    while ((bytesRead = partInputStream.read(buffer)) != -1) {
+                        fileOutputStream.write(buffer, 0, bytesRead);
+                    }
+                    partInputStream.close(); // Close each part's input stream
                 }
             }
 
-            // Close FileInputStreams and delete temporary part files
-            for (FileInputStream partInputStream : partInputStreams) {
-                partInputStream.close();
-            }
-
             // Delete temporary part files
-            for (int i = 0; i < totalParts; i++) {
+            for (int i = 1; i <= totalParts; i++) {
                 String partFileName = "part" + i + "_" + originalFileName;
                 new File(partFileName).delete();
             }
@@ -217,37 +251,22 @@ public class FileTransfer {
     }
 
 
-    private static void receiveFile(Socket socket, String partPrefix) {
+
+    // Helper method to extract part number from the file name
+    private static int extractPartNumber(FileInputStream fileInputStream)  {
+        String fileName = null;
         try {
-            synchronized (socket.getInputStream()) {
-                InputStream inputStream = socket.getInputStream();
-                ObjectInputStream objectInputStream = new ObjectInputStream(inputStream);
-
-                // Read file name and size
-                String fileName = objectInputStream.readUTF();
-                currentFileName = fileName;
-            long fileSize = objectInputStream.readLong();
-
-                System.out.println("Receiving file: " + fileName + " (" + fileSize + " bytes)");
-
-                // Read file content
-                byte[] buffer = new byte[1024];
-                FileOutputStream fileOutputStream = new FileOutputStream(partPrefix + fileName);
-                int bytesRead;
-
-                while ((bytesRead = objectInputStream.read(buffer)) != -1) {
-                    fileOutputStream.write(buffer, 0, bytesRead);
-                }
-
-                fileOutputStream.close();
-                System.out.println("File part received successfully: " + fileName);
-            }
+            fileName = ((FileInputStream) fileInputStream).getFD().toString();
         } catch (IOException e) {
-            handleException("Error in receiveFile", e);
+            throw new RuntimeException(e);
         }
+        int underscoreIndex = fileName.lastIndexOf('_');
+        int partNumber = Integer.parseInt(fileName.substring(underscoreIndex + 1, fileName.length() - currentFileName.length()));
+        System.out.println("This part is"+ partNumber );
+
+
+        return partNumber;
     }
-
-
 
     private static void handleException(String message, Exception e) {
         System.err.println(message);
