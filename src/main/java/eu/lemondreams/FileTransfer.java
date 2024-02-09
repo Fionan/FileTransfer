@@ -237,7 +237,7 @@ public class FileTransfer {
             }
 
             // Open FileOutputStream for the combined file
-            try (FileOutputStream fileOutputStream = new FileOutputStream(partFiles.get(0).getName().substring(5))) {
+            try (FileOutputStream fileOutputStream = new FileOutputStream(partFiles.get(0).getName().substring(6))) {
                 byte[] buffer = new byte[1024];
                 int bytesRead;
 
