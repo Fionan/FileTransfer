@@ -197,7 +197,7 @@ public class FileTransfer {
 
                 // Read file content
                 byte[] buffer = new byte[1024];
-                FileOutputStream fileOutputStream = new FileOutputStream(partPrefix + fileNameWithPart);
+                FileOutputStream fileOutputStream = new FileOutputStream(fileNameWithPart);
                 int bytesRead;
 
                 while ((bytesRead = objectInputStream.read(buffer)) != -1) {
