@@ -135,7 +135,7 @@ class FileTransferTest {
         whenNew(FileOutputStream.class).thenReturn(fileOutputStream);
 
         // Run the method
-        combineFiles(totalParts, originalFileName);
+        combineFiles(totalParts);
 
         // Verify interactions
         verify(part1Stream, times(1)).read(any(byte[].class));

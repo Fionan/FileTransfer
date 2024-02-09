@@ -142,7 +142,7 @@ public class FileTransfer {
             serverSocket.close();
 
             // Combine files after all receiver threads have finished
-            combineFiles(receiverThreads.size(), currentFileName);
+            combineFiles(receiverThreads.size());
 
             System.out.println("All receiver connections closed");
         } catch (IOException | InterruptedException e) {
@@ -150,6 +150,7 @@ public class FileTransfer {
         }
     }
 @Deprecated
+/*
     private static void receive(ServerSocket serverSocket) {
         try {
             List<Thread> threads = new ArrayList<>();
@@ -176,7 +177,7 @@ public class FileTransfer {
         }
     }
 
-
+*/
 
     private static void receiveFile(Socket socket, String partPrefix) {
         try {
@@ -213,19 +214,30 @@ public class FileTransfer {
     }
 
 
-    public static void combineFiles(int totalParts, String originalFileName) {
+    public static void combineFiles(int totalParts) {
         try {
             List<FileInputStream> partInputStreams = new ArrayList<>();
 
-            // Open FileInputStreams for each part
-            for (int i = 1; i <= totalParts; i++) {
-                String partFileName = "part" + i + "_" + originalFileName;
-                partInputStreams.add(new FileInputStream(partFileName));
+            // Get a list of part files based on the naming convention
+            List<File> partFiles = new ArrayList<>();
+            for (int i = 0; i < totalParts; i++) {
+                String partFileName = "part" + i + "_";
+                File[] files = new File(".").listFiles((dir, name) -> name.startsWith(partFileName));
+                if (files != null && files.length > 0) {
+                    partFiles.add(files[0]); // Assuming there's only one file matching the prefix
+                }
             }
 
+            // Sort part files based on part number
+            partFiles.sort(Comparator.comparingInt(f -> extractPartNumber(f.getName())));
+
+            // Open FileInputStreams for each part
+            for (File partFile : partFiles) {
+                partInputStreams.add(new FileInputStream(partFile));
+            }
 
             // Open FileOutputStream for the combined file
-            try (FileOutputStream fileOutputStream = new FileOutputStream(originalFileName)) {
+            try (FileOutputStream fileOutputStream = new FileOutputStream(partFiles.get(0).getName().substring(5))) {
                 byte[] buffer = new byte[1024];
                 int bytesRead;
 
@@ -239,15 +251,21 @@ public class FileTransfer {
             }
 
             // Delete temporary part files
-            for (int i = 1; i <= totalParts; i++) {
-                String partFileName = "part" + i + "_" + originalFileName;
-                new File(partFileName).delete();
+            for (File partFile : partFiles) {
+                partFile.delete();
             }
 
-            System.out.println("Combined file received and saved as: " + originalFileName);
+            System.out.println("Combined file received and saved as: " + partFiles.get(0).getName().substring(5));
         } catch (IOException e) {
             handleException("Error in combineFiles", e);
         }
+    }
+
+    // Helper method to extract the part number from the file name
+    private static int extractPartNumber(String fileName) {
+        int underscoreIndex = fileName.indexOf('_');
+        int partIndex = fileName.indexOf("part") + 4;
+        return Integer.parseInt(fileName.substring(partIndex, underscoreIndex));
     }
 
 
