@@ -1,39 +1,275 @@
 package eu.lemondreams;
 
+import eu.lemondreams.MenuMaker.Menu;
+import eu.lemondreams.MenuMaker.MenuItem;
+import eu.lemondreams.MenuMaker.MenuItemCondition;
+
 import java.io.*;
 import java.net.*;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 
 public class FileTransfer {
     private static final int PORT_NUMBER = 9990;
+    private static final String SEND_CMD = "SEND";
+    private static final String RECEIVE_CMD = "RECEIVE";
+    private static final String MODE_TYPE = "MODE_TYPE";
 
-    private static final  HashMap<Integer,String> order_of_files_recieved = new HashMap<>();
+    private static final String INITIAL_MODE = "UN-DEFINED!";
 
-    private static String currentFileName= "";
+    private static final String SOCKET_COUNT = "SOCKET_COUNT";
+    private static final HashMap<Integer, String> order_of_files_received = new HashMap<>();
+
+    private static String currentFileName = "";
+
+
+
+
+
     public static void main(String[] args) {
-        if (args.length < 3) {
-            System.out.println("Usage: java FileTransfer <SEND/RECEIVE> <FILE_PATH> <INTERFACE_IP1> [<INTERFACE_IP2> ...]");
-            System.exit(1);
+        if (args.length == 0) {
+            interactiveMenu();
+        } else {
+
+            if (args.length < 3) {
+                System.out.println("Usage: java FileTransfer <SEND/RECEIVE> <FILE_PATH> <INTERFACE_IP1> [<INTERFACE_IP2> ...]");
+                System.exit(1);
+            }
+
+            String mode = args[0].toUpperCase();
+
+            String filePath = args[1];
+            String[] interfaceIps = Arrays.copyOfRange(args, 2, args.length);
+
+            if (mode.equals(SEND_CMD)) {
+                runSender(filePath, interfaceIps);
+            } else if (mode.equals(RECEIVE_CMD)) {
+                runReceiver(interfaceIps);
+            } else {
+                System.out.println("Invalid mode. Use SEND or RECEIVE.");
+                System.exit(1);
+            }
+
         }
 
-        String mode = args[0].toUpperCase();
+    }
 
-        String filePath = args[1];
-        String[] interfaceIps = Arrays.copyOfRange(args, 2, args.length);
+    public static void interactiveMenu() {
 
-        if (mode.equals("SEND")) {
-            runSender(filePath,interfaceIps);
-        } else if (mode.equals("RECEIVE")) {
-            runReceiver(interfaceIps);
-        } else {
-            System.out.println("Invalid mode. Use SEND or RECEIVE.");
-            System.exit(1);
+        Menu mainMenu = new Menu(Menu.MenuType.MAIN);
+
+        mainMenu.setValue(MODE_TYPE, INITIAL_MODE);
+
+        MenuItem modeTypeMi = new MenuItem("Select Mode Type SEND or RECEIVE", () -> {
+
+            System.out.println("Input SEND MODE (s)end/(r)eceive)");
+            String ans = mainMenu.getUserInputString();
+            ans = ans.toUpperCase();
+            if (ans.contains("S") || ans.contains("R")) {
+                //we can continue
+
+                if (ans.contains("S")) {
+                    mainMenu.setValue(MODE_TYPE, SEND_CMD);
+                    System.out.println("SEND Mode Selected");
+                } else {
+                    mainMenu.setValue(MODE_TYPE, RECEIVE_CMD);
+                    System.out.println("RECEIVE Mode Selected");
+
+                }
+
+
+            } else {
+                System.out.println("Invalid mode chosen");
+            }
+
+        });
+        mainMenu.addMenuItem(modeTypeMi);
+
+        //mainMenu.addMenuItemWithKVInput(Menu.InputType.INTEGER, "How many sockets will be used", SOCKET_COUNT);
+        MenuItem getSocketConnectionCount = new MenuItem("How Many Sockets will be used", () ->{
+
+            int socketCount = mainMenu.getUserInputInt();
+
+            while(socketCount<=0 || socketCount>10){
+                System.out.println("Input a valid number of connections (1-10) ");
+                socketCount = mainMenu.getUserInputInt();
+
+            }
+            mainMenu.setValue(SOCKET_COUNT,socketCount+"");
+
+
+        }, new MenuItemCondition() {
+            @Override
+            public boolean isMet() {
+                return (mainMenu.getValue(MODE_TYPE)!= INITIAL_MODE);
+            }
+        });
+
+        mainMenu.addMenuItem(getSocketConnectionCount);
+
+
+        ArrayList<String> ipList = new ArrayList<>();
+        MenuItem getIPaddresses = new MenuItem("Input IP addresses", () -> {
+
+            int ipcount = Integer.parseInt(mainMenu.getValue(SOCKET_COUNT));
+
+            for (int i = 1; i <= ipcount; i++) {
+                System.out.println("Please input position " + i + " ipv4 address as xxx.xxx.xxx.xxx");
+                String s = mainMenu.getUserInputString();
+
+                while (!isValidIPv4(s)) {
+                    System.out.println("Error found please input in valid IPv4 address or (e)xit");
+                    s = mainMenu.getUserInputString();
+
+                    if (s.toLowerCase().contains("e")) {
+                        return;
+                    }
+                }
+
+                ipList.add(s);
+
+            }
+
+        }, new MenuItemCondition() {
+            @Override
+            public boolean isMet() {
+                return mainMenu.getValue(SOCKET_COUNT) != null;
+            }
+        });
+
+
+        mainMenu.addMenuItem(getIPaddresses);
+
+
+        MenuItem runReceiver = new MenuItem("RECEIVE File", () -> {
+
+            System.out.println("Waiting for connection..");
+
+            String[] ips = new String[ipList.size()];
+            ips = ipList.toArray(ips);
+
+            runReceiver(ips);
+
+
+        }, new MenuItemCondition() {
+            @Override
+            public boolean isMet() {
+                boolean isValid = false;
+
+                String mode = mainMenu.getValue(MODE_TYPE);
+
+                if (mode.equalsIgnoreCase(RECEIVE_CMD)) {
+
+                    if (ipList.size() > 0) {
+
+                        isValid = true;
+                    }
+
+                }
+
+                return isValid;
+
+            }
+        });
+
+        mainMenu.addMenuItem(runReceiver);
+
+
+        MenuItem runSender = new MenuItem(SEND_CMD, () -> {
+            String[] ips = new String[ipList.size()];
+            ips = ipList.toArray(ips);
+
+            System.out.println("Please enter full path of the file you wish to send  e.g C:\\Directory\\File.ext");
+            String filepath = mainMenu.getUserInputString();
+
+            while (!isValidPath(filepath)) {
+                System.out.println("File Not found");
+                System.out.println("Please enter full path of the file you wish to send  e.g C:\\Directory\\File.ext");
+                filepath = mainMenu.getUserInputString();
+            }
+
+
+            runSender(filepath, ips);
+
+
+        }, new MenuItemCondition() {
+            @Override
+            public boolean isMet() {
+                boolean isValid = false;
+
+                String mode = mainMenu.getValue(MODE_TYPE);
+
+                if (mode.equalsIgnoreCase(SEND_CMD)) {
+
+                    if (ipList.size() > 0) {
+
+                        isValid = true;
+                    }
+
+                }
+
+                return isValid;
+
+            }
+        });
+
+        mainMenu.addMenuItem(runSender);
+
+        mainMenu.run();
+
+
+    }
+
+
+    public static boolean isValidPath(String pathString) {
+        try {
+            // Convert the string to a Path object
+            Path path = Paths.get(pathString);
+
+            // Check if the path exists
+            return Files.exists(path);
+        } catch (InvalidPathException | NullPointerException e) {
+            // Handle invalid path format or null input
+            return false;
         }
     }
 
-    public static void runSender( String filePath,String... interfaceIps) {
+    public static boolean isValidIPv4(String ipAddress) {
+        // Define the IPv4 address pattern
+        String ipv4Pattern = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
+
+        // Compile the regular expression
+        Pattern pattern = Pattern.compile(ipv4Pattern);
+
+        // Create a matcher with the given IP address
+        Matcher matcher = pattern.matcher(ipAddress);
+
+        // Check if the IP address matches the pattern
+        return matcher.matches();
+    }
+
+
+    private static List getIPCount(int count) {
+
+        List ipNames = new ArrayList<>();
+
+        for (int i = 0; i < count; i++) {
+            ipNames.add("IP:" + i);
+        }
+
+        return ipNames;
+    }
+
+
+    public static void runSender(String filePath, String... interfaceIps) {
         try {
             List<Thread> senderThreads = new ArrayList<>();
             int totalInterfaces = interfaceIps.length;
@@ -149,7 +385,8 @@ public class FileTransfer {
             handleException("Error in runReceiver", e);
         }
     }
-@Deprecated
+
+    @Deprecated
 /*
     private static void receive(ServerSocket serverSocket) {
         try {
@@ -269,9 +506,8 @@ public class FileTransfer {
     }
 
 
-
     // Helper method to extract part number from the file name
-    private static int extractPartNumber(FileInputStream fileInputStream)  {
+    private static int extractPartNumber(FileInputStream fileInputStream) {
         String fileName = null;
         try {
             fileName = ((FileInputStream) fileInputStream).getFD().toString();
@@ -280,7 +516,7 @@ public class FileTransfer {
         }
         int underscoreIndex = fileName.lastIndexOf('_');
         int partNumber = Integer.parseInt(fileName.substring(underscoreIndex + 1, fileName.length() - currentFileName.length()));
-        System.out.println("This part is"+ partNumber );
+        System.out.println("This part is" + partNumber);
 
 
         return partNumber;
