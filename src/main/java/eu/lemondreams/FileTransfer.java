@@ -1,5 +1,6 @@
 package eu.lemondreams;
 
+import com.sun.tools.javac.Main;
 import eu.lemondreams.MenuMaker.Menu;
 import eu.lemondreams.MenuMaker.MenuItem;
 import eu.lemondreams.MenuMaker.MenuItemCondition;
@@ -18,20 +19,16 @@ import java.util.regex.Pattern;
 
 
 public class FileTransfer {
-    private static final int PORT_NUMBER = 9990;
+    private static int PORT_NUMBER = 59595;
     private static final String SEND_CMD = "SEND";
     private static final String RECEIVE_CMD = "RECEIVE";
     private static final String MODE_TYPE = "MODE_TYPE";
-
     private static final String INITIAL_MODE = "UN-DEFINED!";
 
     private static final String SOCKET_COUNT = "SOCKET_COUNT";
     private static final HashMap<Integer, String> order_of_files_received = new HashMap<>();
 
     private static String currentFileName = "";
-
-
-
 
 
     public static void main(String[] args) {
@@ -85,7 +82,6 @@ public class FileTransfer {
 
                 }
 
-
             } else {
                 System.out.println("Invalid mode chosen");
             }
@@ -94,22 +90,22 @@ public class FileTransfer {
         mainMenu.addMenuItem(modeTypeMi);
 
         //mainMenu.addMenuItemWithKVInput(Menu.InputType.INTEGER, "How many sockets will be used", SOCKET_COUNT);
-        MenuItem getSocketConnectionCount = new MenuItem("How Many Sockets will be used", () ->{
+        MenuItem getSocketConnectionCount = new MenuItem("How Many Sockets will be used", () -> {
 
             int socketCount = mainMenu.getUserInputInt();
 
-            while(socketCount<=0 || socketCount>10){
+            while (socketCount <= 0 || socketCount > 10) {
                 System.out.println("Input a valid number of connections (1-10) ");
                 socketCount = mainMenu.getUserInputInt();
 
             }
-            mainMenu.setValue(SOCKET_COUNT,socketCount+"");
+            mainMenu.setValue(SOCKET_COUNT, socketCount + "");
 
 
         }, new MenuItemCondition() {
             @Override
             public boolean isMet() {
-                return (mainMenu.getValue(MODE_TYPE)!= INITIAL_MODE);
+                return (mainMenu.getValue(MODE_TYPE) != INITIAL_MODE);
             }
         });
 
@@ -222,6 +218,49 @@ public class FileTransfer {
         });
 
         mainMenu.addMenuItem(runSender);
+
+        Menu config = new Menu(mainMenu, "Settings & Config");
+
+        config.addMenuItem(new MenuItem("View Hosts IPv4 addresses", () -> {
+            List ipV4AddreesList = NetworkInfoPrinter.getIPv4IPList();
+            System.out.println("These are the current ipV4 addresses on this host:\n");
+            for (Object o : ipV4AddreesList) {
+                System.out.println("" + o);
+
+            }
+
+
+        }));
+
+        config.addMenuItem("View current port number", () -> {
+
+            System.out.println("The current port Number is : " + PORT_NUMBER);
+
+
+        });
+
+        config.addMenuItem("Change Port number", () -> {
+            System.out.println("Enter a Port number (49152-65535) :");
+            int portNumber = mainMenu.getUserInputInt();
+
+            if (portNumber > 1024 && portNumber < 65535) {
+                //check if port is free
+                if (NetworkInfoPrinter.isPortAvailable(portNumber)) {
+
+                    PORT_NUMBER = portNumber;
+                } else {
+                    System.out.println("Invalid Port specified !");
+                }
+            } else {
+                System.out.println("Invalid Port specified !");
+            }
+
+            System.out.println("The current port Number is : " + PORT_NUMBER);
+        });
+
+
+        MenuItem configMenu = new MenuItem("Settings & Config", config);
+        mainMenu.addMenuItem(configMenu);
 
         mainMenu.run();
 
