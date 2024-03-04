@@ -10,43 +10,7 @@ import java.util.regex.Pattern;
 public class NetworkInfoPrinter {
 
 
-    public static List getIPv4IPList(){
-
-        ArrayList ipList =new ArrayList();
-
-        try {
-            // Get all network interfaces on the system
-            Enumeration<NetworkInterface> networkInterfaces = NetworkInterface.getNetworkInterfaces();
-
-            // Iterate through each network interface
-            while (networkInterfaces.hasMoreElements()) {
-                NetworkInterface networkInterface = networkInterfaces.nextElement();
-
-                // Get the IP addresses associated with the network interface
-                Enumeration<InetAddress> inetAddresses = networkInterface.getInetAddresses();
-
-                // Iterate through each IP address
-                while (inetAddresses.hasMoreElements()) {
-                    InetAddress address = inetAddresses.nextElement();
-
-                    if(isValidIPv4(address.getHostAddress())){
-                        ipList.add(address.getHostAddress());
-
-                    }
-
-
-                }
-
-            }
-        } catch (SocketException e) {
-            e.printStackTrace();
-        }
-        return  ipList;
-
-    }
-
-
-    public static boolean isPortAvailable(int port) {
+     public static boolean isPortAvailable(int port) {
         try (ServerSocket serverSocket = new ServerSocket(port)) {
             // If the server socket is successfully created, the port is available
             return true;

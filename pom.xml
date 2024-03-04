@@ -46,12 +46,12 @@
             <version>2.0.9</version>
             <scope>test</scope>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/commons-net/commons-net -->
         <dependency>
             <groupId>commons-net</groupId>
             <artifactId>commons-net</artifactId>
-            <version>3.7</version> <!-- Use the latest version available -->
+            <version>3.10.0</version>
         </dependency>
 
     </dependencies>
-
 </project>

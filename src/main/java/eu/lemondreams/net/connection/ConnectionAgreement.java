@@ -1,5 +1,6 @@
 package eu.lemondreams.net.connection;
 
+import eu.lemondreams.net.tools.IPAddressWithSubnet;
 import eu.lemondreams.net.tools.NetworkInfoPrinter;
 
 import java.util.ArrayList;
@@ -13,16 +14,23 @@ public class ConnectionAgreement {
     ConnectionOffer FOREIGN;
     ConnectionOffer LOCAL;
 
-    private List localIpList;
+    private ArrayList<IPAddressWithSubnet> localIpList;
 
 
     public ConnectionAgreement(ConnectionOffer FOREIGN) {
         this.FOREIGN = FOREIGN;
 
-        this.localIpList = NetworkInfoPrinter.getIPv4IPList();
+        this.localIpList = IPAddressWithSubnet.getValidIPv4Addresses();
 
 
-        List ipSharedNetworkList = ipMatchCheck(FOREIGN.getIpNetworks());
+        ArrayList<IPAddressWithSubnet> ipSharedNetworkList = ipMatchCheck(FOREIGN.getIpNetworks());
+
+        if(ipSharedNetworkList==null){
+            System.err.println("Ip Shared Network = null");
+            this.LOCAL = new ConnectionOffer(ConnectionOffer.CONNECTION_TYPE.FAIL);
+            return;
+        }
+
 
         if (ipSharedNetworkList.size() > 0) {
 
@@ -30,12 +38,12 @@ public class ConnectionAgreement {
 
 
         } else {
-            this.LOCAL = new ConnectionOffer(ConnectionOffer.CONNECTION_TYPE.FAIL);
+
         }
 
     }
 
-    private List ipMatchCheck(List foreignIpList) {
+    private ArrayList<IPAddressWithSubnet> ipMatchCheck(ArrayList<IPAddressWithSubnet> foreignIpList) {
 
         ArrayList<String> validIp = new ArrayList<>();
 
@@ -44,14 +52,23 @@ public class ConnectionAgreement {
 
             for (int j = 0; j < foreignIpList.size() ; j++) {
 
-                String tmpLocal = (String)localIpList.get(i);
-                String tmpForeign = (String)foreignIpList.get(j);
+                String tmpLocal = localIpList.get(i).getIpAddress();
+                String tmpForeign = foreignIpList.get(j).getIpAddress();
+
+                System.out.println(tmpLocal +" : "+tmpForeign);
 
                 String localIP = extractIPAddressFromCIDR(tmpLocal);
                 String foreignIP = extractIPAddressFromCIDR(tmpForeign);
 
-                String localSubnet = extractSubnetMaskFromCIDR(tmpLocal);
-                String foreignSubnet = extractSubnetMaskFromCIDR(tmpForeign);
+                System.out.println(localIP + " : "+foreignIP);
+
+
+                String localSubnet = extractSubnetMaskFromCIDR(String.valueOf(localIpList.get(i)));
+                String foreignSubnet = extractSubnetMaskFromCIDR(String.valueOf(foreignIpList.get(j)));
+
+
+
+
 
                 if(foreignSubnet.equalsIgnoreCase(localSubnet)) {
 

@@ -119,8 +119,8 @@ public class ConnectionOffer implements Serializable {
         this.uuid = uuid;
     }
 
-    public List<IPAddressWithSubnet> getIpNetworks() {
-        return ipNetworks;
+    public ArrayList<IPAddressWithSubnet> getIpNetworks() {
+        return(ArrayList<IPAddressWithSubnet>) ipNetworks;
     }
 
     public void setIpNetworks(List<IPAddressWithSubnet> ipNetworks) {
