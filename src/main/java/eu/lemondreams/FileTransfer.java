@@ -17,15 +17,13 @@ import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static eu.lemondreams.InteractiveMenu.RECEIVE_CMD;
+import static eu.lemondreams.InteractiveMenu.SEND_CMD;
+
 
 public class FileTransfer {
-    private static int PORT_NUMBER = 59595;
-    private static final String SEND_CMD = "SEND";
-    private static final String RECEIVE_CMD = "RECEIVE";
-    private static final String MODE_TYPE = "MODE_TYPE";
-    private static final String INITIAL_MODE = "UN-DEFINED!";
+    static int PORT_NUMBER = 59595;
 
-    private static final String SOCKET_COUNT = "SOCKET_COUNT";
     private static final HashMap<Integer, String> order_of_files_received = new HashMap<>();
 
     private static String currentFileName = "";
@@ -33,7 +31,7 @@ public class FileTransfer {
 
     public static void main(String[] args) {
         if (args.length == 0) {
-            interactiveMenu();
+            InteractiveMenu.run();
         } else {
 
             if (args.length < 3) {
@@ -59,241 +57,6 @@ public class FileTransfer {
 
     }
 
-    public static void interactiveMenu() {
-
-        Menu mainMenu = new Menu(Menu.MenuType.MAIN);
-
-        mainMenu.setValue(MODE_TYPE, INITIAL_MODE);
-
-        MenuItem modeTypeMi = new MenuItem("Select Mode Type SEND or RECEIVE", () -> {
-
-            System.out.println("Input SEND MODE (s)end/(r)eceive)");
-            String ans = mainMenu.getUserInputString();
-            ans = ans.toUpperCase();
-            if (ans.contains("S") || ans.contains("R")) {
-                //we can continue
-
-                if (ans.contains("S")) {
-                    mainMenu.setValue(MODE_TYPE, SEND_CMD);
-                    System.out.println("SEND Mode Selected");
-                } else {
-                    mainMenu.setValue(MODE_TYPE, RECEIVE_CMD);
-                    System.out.println("RECEIVE Mode Selected");
-
-                }
-
-            } else {
-                System.out.println("Invalid mode chosen");
-            }
-
-        });
-        mainMenu.addMenuItem(modeTypeMi);
-
-        //mainMenu.addMenuItemWithKVInput(Menu.InputType.INTEGER, "How many sockets will be used", SOCKET_COUNT);
-        MenuItem getSocketConnectionCount = new MenuItem("How Many Sockets will be used", () -> {
-
-            int socketCount = mainMenu.getUserInputInt();
-
-            while (socketCount <= 0 || socketCount > 10) {
-                System.out.println("Input a valid number of connections (1-10) ");
-                socketCount = mainMenu.getUserInputInt();
-
-            }
-            mainMenu.setValue(SOCKET_COUNT, socketCount + "");
-
-
-        }, new MenuItemCondition() {
-            @Override
-            public boolean isMet() {
-                return (mainMenu.getValue(MODE_TYPE) != INITIAL_MODE);
-            }
-        });
-
-        mainMenu.addMenuItem(getSocketConnectionCount);
-
-
-        ArrayList<String> ipList = new ArrayList<>();
-        MenuItem getIPaddresses = new MenuItem("Input IP addresses", () -> {
-
-            int ipcount = Integer.parseInt(mainMenu.getValue(SOCKET_COUNT));
-
-            for (int i = 1; i <= ipcount; i++) {
-                System.out.println("Please input position " + i + " ipv4 address as xxx.xxx.xxx.xxx");
-                String s = mainMenu.getUserInputString();
-
-                while (!isValidIPv4(s)) {
-                    System.out.println("Error found please input in valid IPv4 address or (e)xit");
-                    s = mainMenu.getUserInputString();
-
-                    if (s.toLowerCase().contains("e")) {
-                        return;
-                    }
-                }
-
-                ipList.add(s);
-
-            }
-
-        }, new MenuItemCondition() {
-            @Override
-            public boolean isMet() {
-                return mainMenu.getValue(SOCKET_COUNT) != null;
-            }
-        });
-
-
-        mainMenu.addMenuItem(getIPaddresses);
-
-
-        MenuItem runReceiver = new MenuItem("RECEIVE File", () -> {
-
-            System.out.println("Waiting for connection..");
-
-            String[] ips = new String[ipList.size()];
-            ips = ipList.toArray(ips);
-
-            runReceiver(ips);
-
-
-        }, new MenuItemCondition() {
-            @Override
-            public boolean isMet() {
-                boolean isValid = false;
-
-                String mode = mainMenu.getValue(MODE_TYPE);
-
-                if (mode.equalsIgnoreCase(RECEIVE_CMD)) {
-
-                    if (ipList.size() > 0) {
-
-                        isValid = true;
-                    }
-
-                }
-
-                return isValid;
-
-            }
-        });
-
-        mainMenu.addMenuItem(runReceiver);
-
-
-        MenuItem runSender = new MenuItem(SEND_CMD, () -> {
-            String[] ips = new String[ipList.size()];
-            ips = ipList.toArray(ips);
-
-            System.out.println("Please enter full path of the file you wish to send  e.g C:\\Directory\\File.ext");
-            String filepath = mainMenu.getUserInputString();
-
-            while (!isValidPath(filepath)) {
-                System.out.println("File Not found");
-                System.out.println("Please enter full path of the file you wish to send  e.g C:\\Directory\\File.ext");
-                filepath = mainMenu.getUserInputString();
-            }
-
-
-            runSender(filepath, ips);
-
-
-        }, new MenuItemCondition() {
-            @Override
-            public boolean isMet() {
-                boolean isValid = false;
-
-                String mode = mainMenu.getValue(MODE_TYPE);
-
-                if (mode.equalsIgnoreCase(SEND_CMD)) {
-
-                    if (ipList.size() > 0) {
-
-                        isValid = true;
-                    }
-
-                }
-
-                return isValid;
-
-            }
-        });
-
-        mainMenu.addMenuItem(runSender);
-
-        Menu config = new Menu(mainMenu, "Settings & Config");
-
-        config.addMenuItem(new MenuItem("View Hosts IPv4 addresses", () -> {
-            List ipV4AddreesList = NetworkInfoPrinter.getIPv4IPList();
-            System.out.println("These are the current ipV4 addresses on this host:\n");
-            for (Object o : ipV4AddreesList) {
-                System.out.println("" + o);
-
-            }
-
-
-        }));
-
-        config.addMenuItem("View current port number", () -> {
-
-            System.out.println("The current port Number is : " + PORT_NUMBER);
-
-
-        });
-
-        config.addMenuItem("Change Port number", () -> {
-            System.out.println("Enter a Port number (49152-65535) :");
-            int portNumber = mainMenu.getUserInputInt();
-
-            if (portNumber > 1024 && portNumber < 65535) {
-                //check if port is free
-                if (NetworkInfoPrinter.isPortAvailable(portNumber)) {
-
-                    PORT_NUMBER = portNumber;
-                } else {
-                    System.out.println("Invalid Port specified !");
-                }
-            } else {
-                System.out.println("Invalid Port specified !");
-            }
-
-            System.out.println("The current port Number is : " + PORT_NUMBER);
-        });
-
-
-        MenuItem configMenu = new MenuItem("Settings & Config", config);
-        mainMenu.addMenuItem(configMenu);
-
-        mainMenu.run();
-
-
-    }
-
-
-    public static boolean isValidPath(String pathString) {
-        try {
-            // Convert the string to a Path object
-            Path path = Paths.get(pathString);
-
-            // Check if the path exists
-            return Files.exists(path);
-        } catch (InvalidPathException | NullPointerException e) {
-            // Handle invalid path format or null input
-            return false;
-        }
-    }
-
-    public static boolean isValidIPv4(String ipAddress) {
-        // Define the IPv4 address pattern
-        String ipv4Pattern = "^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$";
-
-        // Compile the regular expression
-        Pattern pattern = Pattern.compile(ipv4Pattern);
-
-        // Create a matcher with the given IP address
-        Matcher matcher = pattern.matcher(ipAddress);
-
-        // Check if the IP address matches the pattern
-        return matcher.matches();
-    }
 
 
     private static List getIPCount(int count) {

@@ -46,6 +46,11 @@
             <version>2.0.9</version>
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>commons-net</groupId>
+            <artifactId>commons-net</artifactId>
+            <version>3.7</version> <!-- Use the latest version available -->
+        </dependency>
 
     </dependencies>
 
