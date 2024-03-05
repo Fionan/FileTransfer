@@ -1,134 +1,117 @@
 package eu.lemondreams;
 
 import java.io.*;
-import java.net.*;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static eu.lemondreams.InteractiveMenu.RECEIVE_CMD;
+import static eu.lemondreams.InteractiveMenu.SEND_CMD;
+
+
 public class FileTransfer {
-    private static final int PORT_NUMBER = 9990;
+    static int PORT_NUMBER = 59595;
 
-    private static String currentFileName= "";
+    private static final HashMap<Integer, String> order_of_files_received = new HashMap<>();
+
+    private static String currentFileName = "";
+
+
     public static void main(String[] args) {
-        if (args.length != 4) {
-            System.out.println("Usage: java FileTransfer <SEND/RECEIVE> <FILE_PATH> <INTERFACE_IP1> <INTERFACE_IP2> ");
-            System.exit(1);
-        }
-
-        String mode = args[0].toUpperCase();
-
-        String filePath = args[1];
-        String interfaceIp1 = args[2];
-        String interfaceIp2 = args[3];
-
-
-        if (mode.equals("SEND")) {
-            runSender(interfaceIp1, interfaceIp2, filePath);
-        } else if (mode.equals("RECEIVE")) {
-            runReceiver();
+        if (args.length == 0) {
+            InteractiveMenu.run();
         } else {
-            System.out.println("Invalid mode. Use SEND or RECEIVE.");
-            System.exit(1);
-        }
-    }
 
-    public static void runSender(String interfaceIp1, String interfaceIp2, String filePath) {
-        try {
-            // Establish separate sockets for each network interface
-            Socket socket1 = new Socket(interfaceIp1, PORT_NUMBER);
-            Socket socket2 = new Socket(interfaceIp2, PORT_NUMBER + 1);
-
-            // Check if the file exists and can be read
-            File file = new File(filePath);
-            if (!file.exists() || !file.canRead()) {
-                System.err.println("Error: File does not exist or cannot be read.");
-                return;
+            if (args.length < 3) {
+                System.out.println("Usage: java FileTransfer <SEND/RECEIVE> <FILE_PATH> <INTERFACE_IP1> [<INTERFACE_IP2> ...]");
+                System.exit(1);
             }
 
-            // Create threads for sending on each socket
-            Thread thread1 = new Thread(() -> sendFile(socket1, filePath, 0, 0.5));
-            Thread thread2 = new Thread(() -> sendFile(socket2, filePath, 0.5, 1.0));
+            String mode = args[0].toUpperCase();
 
-            // Start both threads
-            thread1.start();
-            thread2.start();
+            String filePath = args[1];
+            String[] interfaceIps = Arrays.copyOfRange(args, 2, args.length);
 
-            // Wait for both threads to finish
-            thread1.join();
-            thread2.join();
+            if (mode.equals(SEND_CMD)) {
+                runSender(filePath, interfaceIps);
+            } else if (mode.equals(RECEIVE_CMD)) {
+                runReceiver(interfaceIps);
+            } else {
+                System.out.println("Invalid mode. Use SEND or RECEIVE.");
+                System.exit(1);
+            }
 
-            // Close sockets
-            socket1.close();
-            socket2.close();
+        }
 
-            System.out.println("Connection closed");
-        } catch (IOException | InterruptedException e) {
+    }
+
+
+
+    private static List getIPCount(int count) {
+
+        List ipNames = new ArrayList<>();
+
+        for (int i = 0; i < count; i++) {
+            ipNames.add("IP:" + i);
+        }
+
+        return ipNames;
+    }
+
+
+    public static void runSender(String filePath, String... interfaceIps) {
+        try {
+            List<Thread> senderThreads = new ArrayList<>();
+            int totalInterfaces = interfaceIps.length;
+
+            // Get the file size
+            long fileSize = new File(filePath).length();
+
+            // Calculate the chunk size for each interface
+            long chunkSize = fileSize / totalInterfaces;
+
+            // Create a thread for each interface
+            for (int i = 0; i < totalInterfaces; i++) {
+                final int index = i;
+
+                // Calculate start and end positions for the chunk
+                long startByte = index * chunkSize;
+                long endByte = (index + 1 == totalInterfaces) ? fileSize : (index + 1) * chunkSize;
+
+                int finalI = i;
+                Thread thread = new Thread(() -> sendFile(interfaceIps[index], filePath, startByte, endByte, finalI));
+                senderThreads.add(thread);
+                thread.start();
+            }
+
+            // Wait for all sender threads to finish
+            for (Thread thread : senderThreads) {
+                thread.join();
+            }
+
+            System.out.println("All sender connections closed");
+        } catch (InterruptedException e) {
             handleException("Error in runSender", e);
         }
     }
 
-    public static void runReceiver() {
+    private static void sendFile(String interfaceIp, String filePath, long startByte, long endByte, int partNumber) {
         try {
-            ServerSocket serverSocket1 = new ServerSocket(PORT_NUMBER);
-            ServerSocket serverSocket2 = new ServerSocket(PORT_NUMBER + 1);
+            Socket socket = new Socket(interfaceIp, PORT_NUMBER);
 
-            System.out.println("Server listening on ports " + PORT_NUMBER + " and " + (PORT_NUMBER + 1));
-
-            boolean running = true;
-
-            while (running) {
-                // Accept connections on both sockets
-                Socket clientSocket1 = serverSocket1.accept();
-                Socket clientSocket2 = serverSocket2.accept();
-
-                System.out.println("Connected to client: " + clientSocket1.getInetAddress() + " on port " + clientSocket1.getPort());
-                System.out.println("Connected to client: " + clientSocket2.getInetAddress() + " on port " + clientSocket2.getPort());
-
-                // Create threads for receiving on each socket
-                Thread thread1 = new Thread(() -> receiveFile(clientSocket1, "part1_"));
-                Thread thread2 = new Thread(() -> receiveFile(clientSocket2, "part2_"));
-
-                // Start both threads
-                System.out.println("Starting Threads");
-                thread1.start();
-                thread2.start();
-
-                // Wait for both threads to finish
-                thread1.join();
-                thread2.join();
-
-                System.out.println("Threads should have joined now");
-
-                clientSocket1.close();
-                clientSocket2.close();
-
-                System.out.println("Connections closed");
-                running = false;
-
-                combineFiles("part1_","part2_",currentFileName,currentFileName);
-
-            }
-        } catch (IOException | InterruptedException e) {
-            handleException("Error in runReceiver", e);
-        }
-    }
-
-    private static void sendFile(Socket socket, String filePath, double startPercentage, double endPercentage) {
-        try {
             synchronized (socket.getOutputStream()) {
                 OutputStream outputStream = socket.getOutputStream();
                 ObjectOutputStream objectOutputStream = new ObjectOutputStream(outputStream);
 
                 // Send file name and size
                 File file = new File(filePath);
-                objectOutputStream.writeUTF(file.getName());
+                String fileNameWithPart = "part" + partNumber + "_" + file.getName();
+                objectOutputStream.writeUTF(fileNameWithPart);
                 objectOutputStream.writeLong(file.length());
 
-                System.out.println("Sending file: " + file.getName() + " (" + file.length() + " bytes)");
-
-                // Calculate start and end positions for the specified percentage range
-                long startByte = calculateFileDivision(file.length(), startPercentage);
-                long endByte = calculateFileDivision(file.length(), endPercentage);
+                System.out.println("Sending file: " + fileNameWithPart + " (" + file.length() + " bytes)");
 
                 // Send file content from start to end positions
                 try (FileInputStream fileInputStream = new FileInputStream(file)) {
@@ -145,50 +128,54 @@ public class FileTransfer {
                 }
 
                 objectOutputStream.flush();
-                System.out.println("File sent successfully: " + file.getName());
+                System.out.println("File sent successfully: " + fileNameWithPart);
+
+                socket.close();
             }
         } catch (IOException e) {
             handleException("Error in sendFile", e);
         }
     }
 
-    private static long calculateFileDivision(long fileSize, double percentage) {
-        return (long) (fileSize * percentage);
-    }
+    public static void runReceiver(String... interfaceIps) {
+        try {
+            // Create a ServerSocket on the primary port
+            ServerSocket serverSocket = new ServerSocket(PORT_NUMBER);
+            System.out.println("Server listening on port " + PORT_NUMBER);
 
+            List<Thread> receiverThreads = new ArrayList<>();
 
+            // Accept connections on the main ServerSocket
+            for (int i = 0; i < interfaceIps.length; i++) {
+                Socket clientSocket = serverSocket.accept();
+                System.out.println("Connected to client: " + clientSocket.getInetAddress() + " on port " + clientSocket.getPort());
 
-    private static void combineFiles(String part1Prefix, String part2Prefix, String originalFileName, String combinedFileName) {
+                final int index = i;
+                Thread thread = new Thread(() -> receiveFile(clientSocket, "part" + index + "_"));
 
-        String part1FileName = part1Prefix + originalFileName;
-        String part2FileName = part2Prefix + originalFileName;
-
-        System.out.println(part1Prefix);
-        System.out.println(part2Prefix);
-
-        try (FileOutputStream fileOutputStream = new FileOutputStream(combinedFileName);
-             FileInputStream part1InputStream = new FileInputStream(part1FileName);
-             FileInputStream part2InputStream = new FileInputStream(part2FileName)) {
-
-            byte[] buffer = new byte[1024];
-            int bytesRead;
-
-            // Write content of part1 file to combined file
-            while ((bytesRead = part1InputStream.read(buffer)) != -1) {
-                fileOutputStream.write(buffer, 0, bytesRead);
+                receiverThreads.add(thread);
             }
 
-            // Write content of part2 file to combined file
-            while ((bytesRead = part2InputStream.read(buffer)) != -1) {
-                fileOutputStream.write(buffer, 0, bytesRead);
+            // Start all receiver threads
+            for (Thread thread : receiverThreads) {
+                thread.start();
             }
-        } catch (IOException e) {
-            handleException("Error in combineFiles", e);
+
+            // Wait for all receiver threads to finish
+            for (Thread thread : receiverThreads) {
+                thread.join();
+            }
+
+            // Close the main ServerSocket
+            serverSocket.close();
+
+            // Combine files after all receiver threads have finished
+            combineFiles(receiverThreads.size());
+
+            System.out.println("All receiver connections closed");
+        } catch (IOException | InterruptedException e) {
+            handleException("Error in runReceiver", e);
         }
-
-        // Delete temporary part files
-        new File(part1FileName).delete();
-        new File(part2FileName).delete();
     }
 
 
@@ -199,15 +186,19 @@ public class FileTransfer {
                 ObjectInputStream objectInputStream = new ObjectInputStream(inputStream);
 
                 // Read file name and size
-                String fileName = objectInputStream.readUTF();
-                currentFileName = fileName;
-            long fileSize = objectInputStream.readLong();
+                String fileNameWithPart = objectInputStream.readUTF();
+                long fileSize = objectInputStream.readLong();
 
-                System.out.println("Receiving file: " + fileName + " (" + fileSize + " bytes)");
+                // Extract part number and original file name
+                String[] fileNameParts = fileNameWithPart.split("_", 2);
+                int partNumber = Integer.parseInt(fileNameParts[0].substring(4)); // assuming "part" prefix
+                String originalFileName = fileNameParts[1];
+
+                System.out.println("Receiving file part " + partNumber + " of: " + originalFileName + " (" + fileSize + " bytes)");
 
                 // Read file content
                 byte[] buffer = new byte[1024];
-                FileOutputStream fileOutputStream = new FileOutputStream(partPrefix + fileName);
+                FileOutputStream fileOutputStream = new FileOutputStream(fileNameWithPart);
                 int bytesRead;
 
                 while ((bytesRead = objectInputStream.read(buffer)) != -1) {
@@ -215,14 +206,86 @@ public class FileTransfer {
                 }
 
                 fileOutputStream.close();
-                System.out.println("File part received successfully: " + fileName);
+                socket.close();
+                System.out.println("File part received successfully: " + fileNameWithPart);
             }
         } catch (IOException e) {
             handleException("Error in receiveFile", e);
+
         }
     }
 
 
+    public static void combineFiles(int totalParts) {
+        try {
+            List<FileInputStream> partInputStreams = new ArrayList<>();
+
+            // Get a list of part files based on the naming convention
+            List<File> partFiles = new ArrayList<>();
+            for (int i = 0; i < totalParts; i++) {
+                String partFileName = "part" + i + "_";
+                File[] files = new File(".").listFiles((dir, name) -> name.startsWith(partFileName));
+                if (files != null && files.length > 0) {
+                    partFiles.add(files[0]); // Assuming there's only one file matching the prefix
+                }
+            }
+
+            // Sort part files based on part number
+            partFiles.sort(Comparator.comparingInt(f -> extractPartNumber(f.getName())));
+
+            // Open FileInputStreams for each part
+            for (File partFile : partFiles) {
+                partInputStreams.add(new FileInputStream(partFile));
+            }
+
+            // Open FileOutputStream for the combined file
+            try (FileOutputStream fileOutputStream = new FileOutputStream(partFiles.get(0).getName().substring(6))) {
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+
+                // Write content of all parts to the combined file
+                for (FileInputStream partInputStream : partInputStreams) {
+                    while ((bytesRead = partInputStream.read(buffer)) != -1) {
+                        fileOutputStream.write(buffer, 0, bytesRead);
+                    }
+                    partInputStream.close(); // Close each part's input stream
+                }
+            }
+
+            // Delete temporary part files
+            for (File partFile : partFiles) {
+                partFile.delete();
+            }
+
+            System.out.println("Combined file received and saved as: " + partFiles.get(0).getName().substring(5));
+        } catch (IOException e) {
+            handleException("Error in combineFiles", e);
+        }
+    }
+
+    // Helper method to extract the part number from the file name
+    private static int extractPartNumber(String fileName) {
+        int underscoreIndex = fileName.indexOf('_');
+        int partIndex = fileName.indexOf("part") + 4;
+        return Integer.parseInt(fileName.substring(partIndex, underscoreIndex));
+    }
+
+
+    // Helper method to extract part number from the file name
+    private static int extractPartNumber(FileInputStream fileInputStream) {
+        String fileName = null;
+        try {
+            fileName = ((FileInputStream) fileInputStream).getFD().toString();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        int underscoreIndex = fileName.lastIndexOf('_');
+        int partNumber = Integer.parseInt(fileName.substring(underscoreIndex + 1, fileName.length() - currentFileName.length()));
+        System.out.println("This part is" + partNumber);
+
+
+        return partNumber;
+    }
 
     private static void handleException(String message, Exception e) {
         System.err.println(message);
