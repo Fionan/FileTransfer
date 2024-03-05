@@ -1,10 +1,8 @@
 package eu.lemondreams.net.connection;
 
 import eu.lemondreams.net.tools.IPAddressWithSubnet;
-import eu.lemondreams.net.tools.NetworkInfoPrinter;
 
 import java.util.ArrayList;
-import java.util.List;
 
 import static eu.lemondreams.net.tools.NetworkChecker.*;
 
@@ -25,7 +23,7 @@ public class ConnectionAgreement {
 
         ArrayList<IPAddressWithSubnet> ipSharedNetworkList = ipMatchCheck(FOREIGN.getIpNetworks());
 
-        if(ipSharedNetworkList==null){
+        if (ipSharedNetworkList == null) {
             System.err.println("Ip Shared Network = null");
             this.LOCAL = new ConnectionOffer(ConnectionOffer.CONNECTION_TYPE.FAIL);
             return;
@@ -34,7 +32,7 @@ public class ConnectionAgreement {
 
         if (ipSharedNetworkList.size() > 0) {
 
-            this.LOCAL = new ConnectionOffer(ConnectionOffer.CONNECTION_TYPE.RECEIVE,ipSharedNetworkList );
+            this.LOCAL = new ConnectionOffer(ConnectionOffer.CONNECTION_TYPE.RECEIVE, ipSharedNetworkList);
 
 
         } else {
@@ -45,34 +43,62 @@ public class ConnectionAgreement {
 
     private ArrayList<IPAddressWithSubnet> ipMatchCheck(ArrayList<IPAddressWithSubnet> foreignIpList) {
 
+        ArrayList<IPAddressWithSubnet> validIps = new ArrayList<>();
+
+        for (int i = 0; i < localIpList.size(); i++) {
+            for (int j = 0; j < foreignIpList.size(); j++) {
+
+                IPAddressWithSubnet localIP = localIpList.get(i);
+
+                IPAddressWithSubnet foreignIP = foreignIpList.get(j);
+
+
+                String localSubnet = extractSubnetMaskFromCIDR(localIP.toString());
+                String foreignSubnet = extractSubnetMaskFromCIDR(foreignIP.toString());
+
+                if (areInSameNetwork(localIP.getIpAddress(), foreignIP.getIpAddress(), localSubnet)) {
+                    if (areInSameNetwork(localIP.getIpAddress(), foreignIP.getIpAddress(), foreignSubnet)) {
+                        validIps.add(localIP);
+                    }
+                }
+
+
+            }
+        }
+
+
+        return validIps;
+
+    }
+
+    @Deprecated
+    private ArrayList<IPAddressWithSubnet> ipMatchCheck_old(ArrayList<IPAddressWithSubnet> foreignIpList) {
+
         ArrayList<String> validIp = new ArrayList<>();
 
 
-        for (int i = 0; i < localIpList.size() ; i++) {
+        for (int i = 0; i < localIpList.size(); i++) {
 
-            for (int j = 0; j < foreignIpList.size() ; j++) {
+            for (int j = 0; j < foreignIpList.size(); j++) {
 
                 String tmpLocal = localIpList.get(i).getIpAddress();
                 String tmpForeign = foreignIpList.get(j).getIpAddress();
 
-                System.out.println(tmpLocal +" : "+tmpForeign);
+                System.out.println(tmpLocal + " : " + tmpForeign);
 
                 String localIP = extractIPAddressFromCIDR(tmpLocal);
                 String foreignIP = extractIPAddressFromCIDR(tmpForeign);
 
-                System.out.println(localIP + " : "+foreignIP);
+                System.out.println(localIP + " : " + foreignIP);
 
 
                 String localSubnet = extractSubnetMaskFromCIDR(String.valueOf(localIpList.get(i)));
                 String foreignSubnet = extractSubnetMaskFromCIDR(String.valueOf(foreignIpList.get(j)));
 
 
+                if (foreignSubnet.equalsIgnoreCase(localSubnet)) {
 
-
-
-                if(foreignSubnet.equalsIgnoreCase(localSubnet)) {
-
-                    if (areInSameNetwork(localIP, foreignIP, localSubnet)){
+                    if (areInSameNetwork(localIP, foreignIP, localSubnet)) {
 
                         validIp.add(tmpLocal);
 
