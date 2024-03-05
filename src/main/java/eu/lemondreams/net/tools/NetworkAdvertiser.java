@@ -92,14 +92,18 @@ public class NetworkAdvertiser {
                     try {
                         ConnectionOffer negotiation = (ConnectionOffer) ois.readObject();
                         System.out.println("Received ConnectionNegotiation: " + negotiation);
+                        ois.close();
+                        socket.close();
                         return negotiation;
 
 
                     } catch (ClassNotFoundException e) {
+
                         e.printStackTrace();
                     }
-
                     ois.close();
+                    socket.close();
+
                 } catch (SocketTimeoutException e) {
 
                     socket.close();

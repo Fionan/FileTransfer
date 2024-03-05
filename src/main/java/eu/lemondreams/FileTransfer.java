@@ -1,21 +1,11 @@
 package eu.lemondreams;
 
-import com.sun.tools.javac.Main;
-import eu.lemondreams.MenuMaker.Menu;
-import eu.lemondreams.MenuMaker.MenuItem;
-import eu.lemondreams.MenuMaker.MenuItemCondition;
-
 import java.io.*;
-import java.net.*;
-import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import static eu.lemondreams.InteractiveMenu.RECEIVE_CMD;
 import static eu.lemondreams.InteractiveMenu.SEND_CMD;
@@ -188,35 +178,6 @@ public class FileTransfer {
         }
     }
 
-    @Deprecated
-/*
-    private static void receive(ServerSocket serverSocket) {
-        try {
-            List<Thread> threads = new ArrayList<>();
-
-            // Accept connections on the main ServerSocket
-            Socket clientSocket = serverSocket.accept();
-
-            System.out.println("Connected to client: " + clientSocket.getInetAddress() + " on port " + clientSocket.getPort());
-
-            // Create thread for receiving on the accepted socket
-            Thread thread = new Thread(() -> receiveFile(clientSocket, "part"));
-            threads.add(thread);
-            thread.start();
-
-            // Wait for the receiver thread to finish
-            for (Thread t : threads) {
-                t.join();
-            }
-
-            // Combine files after all receiver threads have finished
-            combineFiles(threads.size(), currentFileName);
-        } catch (IOException | InterruptedException e) {
-            handleException("Error in receive", e);
-        }
-    }
-
-*/
 
     private static void receiveFile(Socket socket, String partPrefix) {
         try {
@@ -245,10 +206,12 @@ public class FileTransfer {
                 }
 
                 fileOutputStream.close();
+                socket.close();
                 System.out.println("File part received successfully: " + fileNameWithPart);
             }
         } catch (IOException e) {
             handleException("Error in receiveFile", e);
+
         }
     }
 
